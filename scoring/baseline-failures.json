@@ -1,0 +1,4 @@
+[
+  "serves plain statikk targets via statikk JS API with index, nested index, and 404 for missing/parent/dotfiles",
+  "startTargetServer"
+]
