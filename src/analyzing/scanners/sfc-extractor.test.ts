@@ -248,6 +248,12 @@ void test('sfc-extractor: HTML comments', async (t) => {
     assert.deepEqual(scriptBodies('index.html', html), ['document.write("<!--");', 'legacy();']);
   });
 
+  await t.test('<!-- inside noscript is a comment, as where noscript renders', () => {
+    // Approximation: browsers with scripting read noscript content as text.
+    const html = '<style>.a {}</style>\n<noscript><!-- </noscript>\n<style>.b {}</style>';
+    assert.deepEqual(styleBodies('index.html', html), ['.a {}']);
+  });
+
   await t.test('an unterminated comment hides only what follows it', () => {
     const html = '<style>.a {}</style>\n<!-- <style>.b {}</style>';
     assert.deepEqual(styleBodies('index.html', html), ['.a {}']);

@@ -242,6 +242,7 @@ function findCommentEnd(markup: string, bodyStart: number): number {
 function findDeclarationEnd(markup: string, lt: number): number {
   let terminator = '>';
   if (markup.startsWith('<![CDATA[', lt)) {
+    // Outside SVG/MathML this is a bogus comment ending at `>`; `]]>` is deliberately conservative.
     terminator = ']]>';
   } else if (markup[lt + 1] === '?') {
     terminator = '?>';
@@ -294,24 +295,16 @@ function findHtmlCommentRanges(markup: string, fromIndex = 0): { start: number; 
   return ranges;
 }
 
-// The DOM, script and style passes over a file all need the same comment-blanked markup.
-let lastBlankedComments: { relPath: string; markup: string; blanked: string } | undefined;
-
 /**
  * Markup of a file with its HTML comments blanked (offsets and newlines preserved), so that
  * commented-out `<script>`/`<style>` blocks are not extracted. Astro frontmatter is not markup
  * and is left as is.
  */
 function blankHtmlComments(relPath: string, markup: string): string {
-  if (lastBlankedComments?.relPath === relPath && lastBlankedComments.markup === markup) {
-    return lastBlankedComments.blanked;
-  }
   const frontmatterEnd = relPath.toLowerCase().endsWith('.astro')
     ? (ASTRO_FRONTMATTER_REGEX.exec(markup)?.[0].length ?? 0)
     : 0;
-  const blanked = blankRanges(markup, findHtmlCommentRanges(markup, frontmatterEnd));
-  lastBlankedComments = { relPath, markup, blanked };
-  return blanked;
+  return blankRanges(markup, findHtmlCommentRanges(markup, frontmatterEnd));
 }
 
 /**
