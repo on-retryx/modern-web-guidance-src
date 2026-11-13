@@ -263,6 +263,24 @@ export interface FileFilterOptions {
   readonly maxLineLength?: number;
   readonly excludeCorpusNonAppDirs?: boolean;
   readonly includeDocsAndTests?: boolean;
+  /**
+   * Skip directory-based exclusions (build, vendor, and dot directories, vendored library
+   * subpaths, hashed asset directories) so a file is judged by its own name and content.
+   * Used for explicitly named single-file targets.
+   */
+  readonly ignoreAncestorDirs?: boolean;
+}
+
+/**
+ * Returns `true` if the lower-cased `base` file name is a well-known vendored third-party library.
+ */
+function isVendoredLibraryFileName(base: string): boolean {
+  return (
+    VENDORED_LIBRARY_FILENAMES.has(base) ||
+    VENDORED_MOMENT_FILENAME_RE.test(base) ||
+    VENDORED_MODERNIZR_FILENAME_RE.test(base) ||
+    VENDORED_CHUI_STYLESHEET_RE.test(base)
+  );
 }
 
 /**
@@ -272,13 +290,9 @@ export interface FileFilterOptions {
 export function isExcludedCorpusNonAppPath(relPath: string): boolean {
   const normalized = normalizePath(relPath);
   const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  const base = posix.basename(normalized);
 
   return (
-    VENDORED_LIBRARY_FILENAMES.has(base) ||
-    VENDORED_MOMENT_FILENAME_RE.test(base) ||
-    VENDORED_MODERNIZR_FILENAME_RE.test(base) ||
-    VENDORED_CHUI_STYLESHEET_RE.test(base) ||
+    isVendoredLibraryFileName(posix.basename(normalized)) ||
     VENDORED_DIRECTORY_SUBPATHS.some((subpath) => withLeadingSlash.includes(subpath)) ||
     HASHED_ASSET_DIR_RE.test(withLeadingSlash)
   );
@@ -420,6 +434,52 @@ export function hasVendoredLicenseHeader(
 export const MAX_SOURCE_FILE_BYTES = 1_000_000;
 
 /**
+ * Explains why a file cannot be scanned judging only by the file itself (its name, extension
+ * and, when provided, its content), ignoring the directories it lives in.
+ * Returns `undefined` when the file is scannable.
+ */
+export function getUnscannableFileReason(
+  filePath: string,
+  content?: string,
+  options?: FileFilterOptions,
+): string | undefined {
+  const base = posix.basename(normalizePath(filePath));
+  if (!base.endsWith('package.json')) {
+    const dotIdx = base.lastIndexOf('.');
+    if (dotIdx === -1) {
+      return 'files without an extension are not supported';
+    }
+    const ext = base.slice(dotIdx);
+    if (!SUPPORTED_SOURCE_EXTENSIONS.has(ext)) {
+      return `unsupported file extension "${ext}"`;
+    }
+  }
+
+  const ignoredSuffix = DEFAULT_IGNORED_EXTENSIONS.find((ext) => base.endsWith(ext));
+  if (ignoredSuffix) {
+    return `"*${ignoredSuffix}" files are excluded as minified, bundled, or generated output`;
+  }
+  if (isVendoredLibraryFileName(base)) {
+    return 'file name matches a well-known vendored third-party library';
+  }
+
+  if (content !== undefined) {
+    if (Buffer.byteLength(content, 'utf8') > MAX_SOURCE_FILE_BYTES) {
+      return `file exceeds maximum size (${MAX_SOURCE_FILE_BYTES} bytes)`;
+    }
+    const maxLineLength = options?.maxLineLength ?? MAX_UNMINIFIED_LINE_LENGTH;
+    if (isMinifiedContent(content, maxLineLength)) {
+      return `content appears minified (lines longer than ${maxLineLength} characters)`;
+    }
+    if (hasVendoredLicenseHeader(content, options)) {
+      return 'content starts with a versioned third-party license header, indicating vendored code';
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Master predicate determining whether a file should be scanned by analyzer rules.
  */
 export function shouldScanFile(
@@ -428,31 +488,12 @@ export function shouldScanFile(
   options?: FileFilterOptions,
 ): boolean {
   if (
-    isVendoredOrGeneratedPath(relPath, options) ||
+    (!options?.ignoreAncestorDirs && isVendoredOrGeneratedPath(relPath, options)) ||
     (!options?.includeDocsAndTests && isDocsOrTestsPath(relPath))
   ) {
     return false;
   }
-
-  const normalized = normalizePath(relPath);
-  if (!normalized.endsWith('package.json')) {
-    const dotIdx = normalized.lastIndexOf('.');
-    if (dotIdx === -1 || !SUPPORTED_SOURCE_EXTENSIONS.has(normalized.slice(dotIdx))) {
-      return false;
-    }
-  }
-
-  if (content !== undefined) {
-    if (
-      Buffer.byteLength(content, 'utf8') > MAX_SOURCE_FILE_BYTES ||
-      isMinifiedContent(content, options?.maxLineLength) ||
-      hasVendoredLicenseHeader(content, options)
-    ) {
-      return false;
-    }
-  }
-
-  return true;
+  return getUnscannableFileReason(relPath, content, options) === undefined;
 }
 
 /**

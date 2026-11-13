@@ -10,6 +10,7 @@ import type { AnalyzerRule } from '../schema.ts';
 import {
   BUILD_OR_INSTALL_DIR_SEGMENTS,
   DOCS_AND_TESTS_DIR_SEGMENTS,
+  getUnscannableFileReason,
   hasVendoredLicenseHeader,
   isBuildOrInstallPath,
   isCorpusNonAppPath,
@@ -17,6 +18,7 @@ import {
   isExcludedCorpusNonAppPath,
   isMinifiedContent,
   isVendoredOrGeneratedPath,
+  MAX_SOURCE_FILE_BYTES,
   shouldScanFile,
 } from './file-filter.ts';
 import { scanRepoFiles } from './index.ts';
@@ -553,5 +555,43 @@ describe('file-filter and repository scanning: agent dot-dirs, .gitignore, and w
 
       assert.deepEqual(findings.map((f) => f.file), ['app.js']);
     });
+  });
+});
+
+describe('getUnscannableFileReason and ignoreAncestorDirs', () => {
+  it('returns undefined for supported files regardless of their directories', () => {
+    for (const filePath of ['app.css', 'dist/app.js', 'node_modules/pkg/a.tsx', 'APP.CSS', 'package.json', '.cache/x.vue']) {
+      assert.equal(getUnscannableFileReason(filePath, 'const a = 1;\n'), undefined, filePath);
+    }
+  });
+
+  it('explains unsupported extensions, excluded file names, and unscannable content', () => {
+    assert.equal(getUnscannableFileReason('docs/README.md'), 'unsupported file extension ".md"');
+    assert.equal(getUnscannableFileReason('Makefile'), 'files without an extension are not supported');
+    assert.match(getUnscannableFileReason('app.min.css') ?? '', /"\*\.min\.css" files are excluded/);
+    assert.match(getUnscannableFileReason('types.d.ts') ?? '', /"\*\.d\.ts" files are excluded/);
+    assert.match(getUnscannableFileReason('static/jquery.js') ?? '', /vendored third-party library/);
+    assert.match(getUnscannableFileReason('app.js', `${'a'.repeat(1300)}\n`) ?? '', /minified/);
+    assert.match(
+      getUnscannableFileReason('lib.js', '/*! mylib v1.2.3 | MIT License */\nfoo();\n') ?? '',
+      /third-party license header/,
+    );
+    assert.match(
+      getUnscannableFileReason('app.js', 'a'.repeat(MAX_SOURCE_FILE_BYTES + 1)) ?? '',
+      /exceeds maximum size/,
+    );
+  });
+
+  it('ignoreAncestorDirs skips only directory-based exclusions in shouldScanFile', () => {
+    const options = { ignoreAncestorDirs: true };
+    for (const filePath of ['build/x/app.css', 'tmp/a.js', 'libs/site.css', '.cache/a.css', 'proj/codemirror/a.js', 'assets/a09b59a8/a.css']) {
+      assert.equal(shouldScanFile(filePath), false, filePath);
+      assert.equal(shouldScanFile(filePath, undefined, options), true, filePath);
+    }
+    for (const filePath of ['dist/app.min.js', 'vendor/jquery.js', 'build/notes.txt']) {
+      assert.equal(shouldScanFile(filePath, undefined, options), false, filePath);
+    }
+    assert.equal(shouldScanFile('test/a.css', undefined, options), false);
+    assert.equal(shouldScanFile('test/a.css', undefined, { ...options, includeDocsAndTests: true }), true);
   });
 });

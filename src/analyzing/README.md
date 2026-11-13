@@ -30,6 +30,8 @@ npx -y modern-web-guidance@latest legacy-scan [path/to/project] [options]
 | `--include-docs-and-tests` | Flag | Include documentation, example, demo, and test files (skipped by default). |
 | `-h, --help` | Flag | Display CLI usage information and exit. |
 
+Directory scans silently skip build output, installed and vendored dependencies, dot directories, minified or license-bannered vendored files, and unsupported file types. An explicitly named file is judged only by its own name and content, never by the directories it lives in, and docs/test files are always scanned. If it still cannot be scanned (unsupported extension, minified, vendored, or over the size limit) and is not recognized as a vendored legacy library, the CLI exits with code `1` and reports why, e.g. `Error: Target file cannot be scanned (unsupported file extension ".md"): README.md` (with `--json`, the same message is in the `error` field).
+
 ### Human-Readable Output Example
 
 ```text
