@@ -147,6 +147,13 @@ export const CSS_RULE_EXTENSIONS = [
   '.htm',
 ] as const;
 
+/**
+ * Script extensions whose JSX elements are scanned by element (`dom`) rules.
+ * `.ts`/`.mts`/`.cts` are excluded: TypeScript only parses JSX in `.tsx`, since
+ * `<T>expr` is a type assertion everywhere else.
+ */
+export const JSX_RULE_EXTENSIONS = ['.jsx', '.tsx', '.js', '.mjs', '.cjs'] as const;
+
 export const DOM_RULE_EXTENSIONS = [
   '.html',
   '.htm',
@@ -155,8 +162,7 @@ export const DOM_RULE_EXTENSIONS = [
   '.gts',
   '.gjs',
   '.astro',
-  '.jsx',
-  '.tsx',
+  ...JSX_RULE_EXTENSIONS,
 ] as const;
 
 export const DEPENDENCY_RULE_FILENAMES = ['package.json'] as const;
@@ -377,6 +383,24 @@ export function isMinifiedContent(
   }
 
   return true;
+}
+
+/**
+ * A JSX opening tag or fragment (`<div `, `<Foo.Bar/>`, `<>`) in expression position:
+ * at line start or after `=`, `(`, `,`, `:`, `?`, `&&`, `||`, `{`, `[`, `;`, `=>`,
+ * `return`, `default` or `yield`. Comparisons (`a<b`), Flow generics (`Array<T>`) and
+ * markup inside quoted strings do not match.
+ */
+const JSX_IN_EXPRESSION_POSITION_RE =
+  /(?:^|[=(,:?&|{[;]|=>|\b(?:return|default|yield))\s*<(?:>|[A-Za-z][\w.:-]*[\s/>])/m;
+
+/**
+ * Cheap pre-parse check for whether script content plausibly contains JSX.
+ * Used to keep element rules (and the full parse they force) away from plain
+ * `.js`/`.mjs`/`.cjs` files; false positives only cost a parse, never findings.
+ */
+export function mayContainJsx(content: string): boolean {
+  return JSX_IN_EXPRESSION_POSITION_RE.test(content);
 }
 
 /**

@@ -1,0 +1,1 @@
+{"feature":"jsx-in-js","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":0,"base":"999ccf95","note":"Sound, single-sourced JSX_RULE_EXTENSIONS, regex gate misses rare positions (await/!/+/else/} before <); redundant ext checks","at":"2026-11-13T19:46:39.358Z"}

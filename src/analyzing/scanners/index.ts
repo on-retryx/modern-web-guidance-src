@@ -31,7 +31,9 @@ import {
   isCorpusNonAppPath,
   isDocsOrTestsPath,
   isMinifiedContent,
+  JSX_RULE_EXTENSIONS,
   MAX_SOURCE_FILE_BYTES,
+  mayContainJsx,
   shouldScanFile,
   type FileFilterOptions,
 } from './file-filter.ts';
@@ -283,8 +285,22 @@ function processMultiBlockFile(
   return findings;
 }
 
-const JSX_EXTENSIONS = new Set(['.jsx', '.tsx']);
 const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']);
+const JSX_RULE_EXTENSION_SET: ReadonlySet<string> = new Set(JSX_RULE_EXTENSIONS);
+
+/**
+ * Whether element rules should scan the JSX of a script file. `.jsx`/`.tsx` always
+ * qualify; other JSX-capable extensions (`.js`, `.mjs`, `.cjs`) are usually plain JS,
+ * so they qualify only when the content plausibly contains JSX, sparing JSX-free
+ * files the full parse that element-rule fastTokens would otherwise trigger.
+ */
+function scansJsxElements(ext: string, content: string): boolean {
+  return (
+    ext === '.jsx' ||
+    ext === '.tsx' ||
+    (JSX_RULE_EXTENSION_SET.has(ext) && mayContainJsx(content))
+  );
+}
 
 function resolveFileFilterOptions(options?: ScanOptions): FileFilterOptions | undefined {
   if (
@@ -381,7 +397,7 @@ export function scanFiles(
       }
 
       if (JS_EXTENSIONS.has(ext)) {
-        const activeDom = JSX_EXTENSIONS.has(ext) ? ruleBundle.dom : [];
+        const activeDom = scansJsxElements(ext, content) ? ruleBundle.dom : [];
         findings.push(...scanJsAst(ctx, relPath, content, ruleBundle.js, activeDom, project));
         findings.push(...scanExtractedStyles(ctx, ruleBundle.css));
       }
