@@ -1,1 +1,2 @@
 {"feature":"single-file-target","auto":100,"review":86,"gatesPassed":true,"final":95.8,"improved":true,"previousBest":0,"base":"c4b520ab","note":"Sound, scoped; dir scans byte-identical; residual: vendored-lib detection still ancestor-dir gated, .css dotfile silent 0","at":"2026-11-13T19:50:16.654Z"}
+{"feature":"single-file-target","auto":100,"review":92,"gatesPassed":true,"final":97.6,"improved":true,"previousBest":95.8,"base":"985a092f","note":"Round 2: all findings fixed; dir scans byte-identical vs pre-PR; minor flag-overloading nit","at":"2026-11-13T20:03:24.822Z"}

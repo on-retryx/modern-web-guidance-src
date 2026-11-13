@@ -372,13 +372,16 @@ export async function runAnalyzeCli(
       const fileKey = rel && !rel.startsWith('..') ? rel : basename(resolvedDir);
       files.set(fileKey, content);
       // An explicitly named file is judged by its own name and content, never by its directories.
-      findings = scanFiles(files, activeRules, {
-        fileFilterOptions: { includeDocsAndTests: true, ignoreAncestorDirs: true },
-      });
+      const fileFilterOptions = { includeDocsAndTests: true, ignoreAncestorDirs: true };
+      findings = scanFiles(files, activeRules, { fileFilterOptions });
       // Unscannable files may still be identified as vendored libraries; otherwise say why.
-      const unscannableReason = getUnscannableFileReason(fileKey, content);
+      const unscannableReason = getUnscannableFileReason(fileKey, content, fileFilterOptions);
       if (unscannableReason && findings.length === 0) {
-        return errorCliResult(`Target file cannot be scanned (${unscannableReason}): ${targetDir}`, isJson, targetDir);
+        return errorCliResult(
+          `Target file cannot be scanned (${unscannableReason}): ${targetDir}`,
+          isJson,
+          targetDir,
+        );
       }
     } else {
       findings = await scanRepoFiles(resolvedDir, activeRules, {

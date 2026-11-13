@@ -743,13 +743,18 @@ describe('runAnalyzeCli', () => {
   it('judges an explicitly named file by itself, not by its directories relative to cwd', async () => {
     await withTempDir(async (testDir) => {
       const css = '.box::-webkit-scrollbar {\n  display: none;\n}\n';
-      const relPaths = ['build/x/app.css', 'node_modules/pkg/app.css', 'work/.cache/app.css', 'vendor/codemirror/app.css'];
+      const relPaths = [
+        'build/x/app.css',
+        'node_modules/pkg/app.css',
+        'work/.cache/app.css',
+        'vendor/codemirror/app.css',
+      ];
       for (const relPath of relPaths) {
         await mkdir(join(testDir, relPath, '..'), { recursive: true });
         await writeFile(join(testDir, relPath), css, 'utf8');
       }
 
-      for (const target of [...relPaths, join(testDir, relPaths[0] ?? '')]) {
+      for (const target of [...relPaths, join(testDir, 'build/x/app.css')]) {
         const res = await runAnalyzeCli([target, '--json'], { cwd: testDir });
         assert.equal(res.exitCode, 0, target);
         const parsed = JSON.parse(res.output) as AnalyzeJsonOutput;
@@ -760,49 +765,109 @@ describe('runAnalyzeCli', () => {
     });
   });
 
-  it('rejects an explicitly named file that cannot be scanned with a reason in text and JSON mode', async () => {
+  it('scans an explicitly named file under docs/ or test/ without --include-docs-and-tests', async () => {
     await withTempDir(async (testDir) => {
-      let minified = 'AOS.init();';
-      while (minified.length < 1500) minified += `var a${minified.length}=function(b){return b+1};`;
-      const cases: Array<[file: string, content: string, reason: RegExp]> = [
-        ['README.md', '# Readme\n', /unsupported file extension "\.md"/],
-        ['Makefile', 'all:\n', /files without an extension are not supported/],
-        ['app.min.css', '.a { color: red; }\n', /"\*\.min\.css" files are excluded/],
-        ['jquery.js', 'AOS.init();\n', /well-known vendored third-party library/],
-        ['app.js', `${minified}\n`, /content appears minified/],
-        ['lib.js', "/*! mylib v1.2.3 | MIT License */\nAOS.init();\n", /third-party license header/],
-      ];
+      const css = '.box::-webkit-scrollbar {\n  display: none;\n}\n';
+      for (const relPath of ['docs/app.css', 'test/app.css']) {
+        await mkdir(join(testDir, relPath, '..'), { recursive: true });
+        await writeFile(join(testDir, relPath), css, 'utf8');
 
-      for (const [file, content, reason] of cases) {
-        await writeFile(join(testDir, file), content, 'utf8');
-
-        const resHuman = await runAnalyzeCli([file], { cwd: testDir });
-        assert.equal(resHuman.exitCode, 1, file);
-        assert.equal(resHuman.stdout, '', file);
-        assert.match(resHuman.stderr ?? '', /^Error: Target file cannot be scanned \(/, file);
-        assert.match(resHuman.stderr ?? '', reason, file);
-        assert.ok(resHuman.stderr?.endsWith(`: ${file}\n`), file);
-
-        const resJson = await runAnalyzeCli([file, '--json'], { cwd: testDir });
-        assert.equal(resJson.exitCode, 1, file);
-        const parsed = JSON.parse(resJson.output) as AnalyzeJsonOutput;
-        assert.equal(parsed.targetDir, file);
-        assert.equal(parsed.totalFindings, 0);
-        assert.deepEqual(parsed.guides, []);
-        assert.match(parsed.error ?? '', reason, file);
+        const res = await runAnalyzeCli([relPath, '--json'], { cwd: testDir });
+        assert.equal(res.exitCode, 0, relPath);
+        const parsed = JSON.parse(res.output) as AnalyzeJsonOutput;
+        assert.equal(parsed.totalFindings, 1, relPath);
+        assert.equal(parsed.guides[0]?.rules[0]?.findings[0]?.file, relPath);
+        assert.equal(parsed.skippedDocsAndTestsCount, undefined, relPath);
       }
     });
   });
 
-  it('still reports vendored library findings for an explicitly named library file', async () => {
+  it('rejects an explicitly named file that cannot be scanned with a reason in text and JSON mode', async () => {
     await withTempDir(async (testDir) => {
-      await writeFile(join(testDir, 'aos.js'), '/*! AOS v2.3.4 | MIT License */\nvar x = 1;\n', 'utf8');
+      let minified = 'AOS.init();';
+      while (minified.length < 1500) minified += `var a${minified.length}=function(b){return b+1};`;
+      const cases: Array<[file: string, content: string, reason: string]> = [
+        ['README.md', '# Readme\n', 'unsupported file extension ".md"'],
+        ['Makefile', 'all:\n', 'files without an extension are not supported'],
+        [
+          '.css',
+          '.box::-webkit-scrollbar { display: none; }\n',
+          'files without an extension are not supported',
+        ],
+        [
+          'app.min.css',
+          '.a { color: red; }\n',
+          '"*.min.css" files are excluded as minified, bundled, or generated output',
+        ],
+        [
+          'jquery.js',
+          'AOS.init();\n',
+          'file name matches a well-known vendored third-party library',
+        ],
+        ['app.js', `${minified}\n`, 'content appears minified (lines longer than 1200 characters)'],
+        [
+          'lib.js',
+          '/*! mylib v1.2.3 | MIT License */\nAOS.init();\n',
+          'content starts with a versioned third-party license header, indicating vendored code',
+        ],
+      ];
 
-      const res = await runAnalyzeCli(['aos.js', '--json'], { cwd: testDir });
-      assert.equal(res.exitCode, 0);
-      const parsed = JSON.parse(res.output) as AnalyzeJsonOutput;
-      assert.equal(parsed.error, undefined);
-      assert.equal(parsed.guides[0]?.guideId, 'scroll-entry-exit-effects');
+      for (const [file, content, reason] of cases) {
+        await writeFile(join(testDir, file), content, 'utf8');
+        const message = `Target file cannot be scanned (${reason}): ${file}`;
+
+        const resHuman = await runAnalyzeCli([file], { cwd: testDir });
+        assert.equal(resHuman.exitCode, 1, file);
+        assert.equal(resHuman.stdout, '', file);
+        assert.equal(resHuman.stderr, `Error: ${message}\n`);
+
+        const resJson = await runAnalyzeCli([file, '--json'], { cwd: testDir });
+        assert.equal(resJson.exitCode, 1, file);
+        assert.deepEqual(JSON.parse(resJson.output), {
+          targetDir: file,
+          totalFindings: 0,
+          guides: [],
+          error: message,
+        });
+      }
+    });
+  });
+
+  it('still scans a stemless .html file in directory scans but rejects it as a named file', async () => {
+    await withTempDir(async (testDir) => {
+      await mkdir(join(testDir, 'src'));
+      const html = '<style>.box::-webkit-scrollbar { display: none; }</style>\n';
+      await writeFile(join(testDir, 'src/.html'), html, 'utf8');
+
+      const resDir = await runAnalyzeCli(['.', '--json'], { cwd: testDir });
+      assert.equal(resDir.exitCode, 0);
+      const parsed = JSON.parse(resDir.output) as AnalyzeJsonOutput;
+      assert.equal(parsed.totalFindings, 1);
+      assert.equal(parsed.guides[0]?.rules[0]?.findings[0]?.file, 'src/.html');
+
+      const resFile = await runAnalyzeCli(['src/.html'], { cwd: testDir });
+      assert.equal(resFile.exitCode, 1);
+      assert.equal(
+        resFile.stderr,
+        'Error: Target file cannot be scanned (files without an extension are not supported): src/.html\n',
+      );
+    });
+  });
+
+  it('reports vendored library findings for an explicitly named library file wherever it lives', async () => {
+    await withTempDir(async (testDir) => {
+      const aos = '/*! AOS v2.3.4 | MIT License */\nvar x = 1;\n';
+      for (const relPath of ['aos.js', 'node_modules/aos/aos.js', '.git/aos.js']) {
+        await mkdir(join(testDir, relPath, '..'), { recursive: true });
+        await writeFile(join(testDir, relPath), aos, 'utf8');
+
+        const res = await runAnalyzeCli([relPath, '--json'], { cwd: testDir });
+        assert.equal(res.exitCode, 0, relPath);
+        const parsed = JSON.parse(res.output) as AnalyzeJsonOutput;
+        assert.equal(parsed.error, undefined, relPath);
+        assert.equal(parsed.guides[0]?.guideId, 'scroll-entry-exit-effects', relPath);
+        assert.equal(parsed.guides[0]?.rules[0]?.findings[0]?.file, relPath);
+      }
     });
   });
 });

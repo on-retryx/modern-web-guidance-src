@@ -265,7 +265,8 @@ export interface FileFilterOptions {
   readonly includeDocsAndTests?: boolean;
   /**
    * Skip directory-based exclusions (build, vendor, and dot directories, vendored library
-   * subpaths, hashed asset directories) so a file is judged by its own name and content.
+   * subpaths, hashed asset directories) so a file is judged by its own name and content, and
+   * treat a stemless dotfile such as `.css` as having no extension.
    * Used for explicitly named single-file targets.
    */
   readonly ignoreAncestorDirs?: boolean;
@@ -284,17 +285,41 @@ function isVendoredLibraryFileName(base: string): boolean {
 }
 
 /**
+ * Explains why the lower-cased `base` file name marks generated or vendored output,
+ * or returns `undefined` if the name alone does not exclude it.
+ */
+function getExcludedFileNameReason(base: string): string | undefined {
+  const ignoredSuffix = DEFAULT_IGNORED_EXTENSIONS.find((ext) => base.endsWith(ext));
+  if (ignoredSuffix) {
+    return `"*${ignoredSuffix}" files are excluded as minified, bundled, or generated output`;
+  }
+  if (isVendoredLibraryFileName(base)) {
+    return 'file name matches a well-known vendored third-party library';
+  }
+  return undefined;
+}
+
+/**
+ * Returns `true` if the normalized path lies in a vendored library directory subpath
+ * or a framework-published hashed asset directory.
+ */
+function hasVendoredDirectorySubpath(normalized: string): boolean {
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return (
+    VENDORED_DIRECTORY_SUBPATHS.some((subpath) => withLeadingSlash.includes(subpath)) ||
+    HASHED_ASSET_DIR_RE.test(withLeadingSlash)
+  );
+}
+
+/**
  * Returns `true` if `relPath` is a known vendored third-party library file,
  * vendored library directory subpath, or framework-published hashed asset bundle.
  */
 export function isExcludedCorpusNonAppPath(relPath: string): boolean {
   const normalized = normalizePath(relPath);
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
-
   return (
     isVendoredLibraryFileName(posix.basename(normalized)) ||
-    VENDORED_DIRECTORY_SUBPATHS.some((subpath) => withLeadingSlash.includes(subpath)) ||
-    HASHED_ASSET_DIR_RE.test(withLeadingSlash)
+    hasVendoredDirectorySubpath(normalized)
   );
 }
 
@@ -318,15 +343,25 @@ export function isVendoredOrGeneratedPath(
   relPath: string,
   options?: FileFilterOptions,
 ): boolean {
+  return (
+    getExcludedFileNameReason(posix.basename(normalizePath(relPath))) !== undefined ||
+    isExcludedDirectoryPath(relPath, options)
+  );
+}
+
+/**
+ * Directory-based half of {@link isVendoredOrGeneratedPath}: build, install, vendor, and dot
+ * directories, vendored library subpaths, hashed asset directories, and (optionally) corpus
+ * non-app directories.
+ */
+function isExcludedDirectoryPath(relPath: string, options?: FileFilterOptions): boolean {
   const normalized = normalizePath(relPath);
   const ignoredDirs = options?.customIgnoredDirs ?? VENDORED_DIR_SEGMENTS;
-
   return (
-    isExcludedCorpusNonAppPath(normalized) ||
+    hasVendoredDirectorySubpath(normalized) ||
     hasDotDirSegment(normalized) ||
     hasMatchingDirSegment(normalized, ignoredDirs) ||
-    (options?.excludeCorpusNonAppDirs === true && isCorpusNonAppPath(normalized)) ||
-    DEFAULT_IGNORED_EXTENSIONS.some((ext) => normalized.endsWith(ext))
+    (options?.excludeCorpusNonAppDirs === true && isCorpusNonAppPath(normalized))
   );
 }
 
@@ -445,8 +480,10 @@ export function getUnscannableFileReason(
 ): string | undefined {
   const base = posix.basename(normalizePath(filePath));
   if (!base.endsWith('package.json')) {
+    // Directory scans take everything after the last dot; explicitly named files follow
+    // `extname`, so a stemless dotfile such as `.css` has no extension.
     const dotIdx = base.lastIndexOf('.');
-    if (dotIdx === -1) {
+    if (dotIdx === -1 || (options?.ignoreAncestorDirs && dotIdx === 0)) {
       return 'files without an extension are not supported';
     }
     const ext = base.slice(dotIdx);
@@ -455,12 +492,9 @@ export function getUnscannableFileReason(
     }
   }
 
-  const ignoredSuffix = DEFAULT_IGNORED_EXTENSIONS.find((ext) => base.endsWith(ext));
-  if (ignoredSuffix) {
-    return `"*${ignoredSuffix}" files are excluded as minified, bundled, or generated output`;
-  }
-  if (isVendoredLibraryFileName(base)) {
-    return 'file name matches a well-known vendored third-party library';
+  const excludedNameReason = getExcludedFileNameReason(base);
+  if (excludedNameReason) {
+    return excludedNameReason;
   }
 
   if (content !== undefined) {
@@ -488,7 +522,7 @@ export function shouldScanFile(
   options?: FileFilterOptions,
 ): boolean {
   if (
-    (!options?.ignoreAncestorDirs && isVendoredOrGeneratedPath(relPath, options)) ||
+    (!options?.ignoreAncestorDirs && isExcludedDirectoryPath(relPath, options)) ||
     (!options?.includeDocsAndTests && isDocsOrTestsPath(relPath))
   ) {
     return false;
