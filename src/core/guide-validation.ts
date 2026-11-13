@@ -3,7 +3,7 @@ import path from 'node:path';
 import matter from '@11ty/gray-matter';
 import { marked } from 'marked';
 
-import { validateMacros, stripComments, maskComments, getReferencedFeatureIds } from './macros.ts';
+import { validateMacros, stripComments, maskComments, getFeatureMacroReferences } from './macros.ts';
 import { validateFeature, resolveFeatureId, getBaselineTargetsForGrader, type BaselineTarget } from './baseline.ts';
 import { isKnownCategory, CATEGORIES } from './categories.ts';
 import { buildHeadingMap } from './headings.ts';
@@ -1168,13 +1168,14 @@ export function validateBaselineClaims(body: string, relativePath: string, data?
  * Validates that every web feature referenced by a macro (BASELINE_STATUS, FEATURE, FEATURE_FALLBACKS,
  * FEATURE_ISSUES, or INCLUDE of features/<id>.md) is listed in the guide's `web-feature-ids` frontmatter.
  * Feature gating (origin trials, volatile features) reads only the frontmatter, so an unlisted feature
- * would ship ungated.
+ * would ship ungated. Macros inside code spans and fenced code blocks count, since they are expanded at
+ * build time too. Unknown feature IDs are skipped here because validateMacros already reports them.
  */
 export function validateMacroFeatureIds(body: string, relativePath: string, featureIds: readonly string[]): string[] {
   const listed = new Set(featureIds);
-  return getReferencedFeatureIds(body)
-    .filter(id => !listed.has(id))
-    .map(id => `Feature "${id}" is referenced by a macro but missing from "web-feature-ids" in frontmatter for ${relativePath}.`);
+  return [...getFeatureMacroReferences(body)]
+    .filter(([id]) => !listed.has(id) && validateFeature(id).isValid)
+    .map(([id, macros]) => `Feature "${id}" is referenced by ${macros.join(', ')} but missing from "web-feature-ids" in frontmatter for ${relativePath}.`);
 }
 
 /**
