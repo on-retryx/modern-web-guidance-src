@@ -147,12 +147,16 @@ export const CSS_RULE_EXTENSIONS = [
   '.htm',
 ] as const;
 
+/** Script extensions that are JSX by convention; element rules always scan them. */
+export const ALWAYS_JSX_EXTENSIONS = ['.jsx', '.tsx'] as const;
+
 /**
- * Script extensions whose JSX elements are scanned by element (`dom`) rules.
+ * Script extensions whose JSX elements are scanned by element (`dom`) rules:
+ * {@link ALWAYS_JSX_EXTENSIONS}, plus `.js`/`.mjs`/`.cjs` when {@link mayContainJsx}.
  * `.ts`/`.mts`/`.cts` are excluded: TypeScript only parses JSX in `.tsx`, since
  * `<T>expr` is a type assertion everywhere else.
  */
-export const JSX_RULE_EXTENSIONS = ['.jsx', '.tsx', '.js', '.mjs', '.cjs'] as const;
+export const JSX_RULE_EXTENSIONS = [...ALWAYS_JSX_EXTENSIONS, '.js', '.mjs', '.cjs'] as const;
 
 export const DOM_RULE_EXTENSIONS = [
   '.html',
@@ -387,12 +391,14 @@ export function isMinifiedContent(
 
 /**
  * A JSX opening tag or fragment (`<div `, `<Foo.Bar/>`, `<>`) in expression position:
- * at line start or after `=`, `(`, `,`, `:`, `?`, `&&`, `||`, `{`, `[`, `;`, `=>`,
- * `return`, `default` or `yield`. Comparisons (`a<b`), Flow generics (`Array<T>`) and
- * markup inside quoted strings do not match.
+ * at line start or after `=`, `(`, `,`, `:`, `?`, `!`, `+`, `&&`, `||`, `{`, `}`, `[`,
+ * `;`, `=>`, `return`, `default`, `yield`, `await`, `else`, `typeof` or `void`.
+ * Comparisons (`a<b`), Flow generics (`Array<T>`) and markup inside quoted strings do
+ * not match. Markup after `}` inside template literals (`${x}<div>`) does, which only
+ * costs a parse.
  */
 const JSX_IN_EXPRESSION_POSITION_RE =
-  /(?:^|[=(,:?&|{[;]|=>|\b(?:return|default|yield))\s*<(?:>|[A-Za-z][\w.:-]*[\s/>])/m;
+  /(?:^|[=(,:?!+&|{}[;]|=>|\b(?:return|default|yield|await|else|typeof|void))\s*<(?:>|[A-Za-z][\w.:-]*[\s/>])/m;
 
 /**
  * Cheap pre-parse check for whether script content plausibly contains JSX.

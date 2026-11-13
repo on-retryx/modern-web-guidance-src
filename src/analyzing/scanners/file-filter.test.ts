@@ -361,6 +361,13 @@ describe('mayContainJsx', () => {
       'export default <App />;',
       'ReactDOM.render(<App />, root);',
       'ok && <input type="password" />',
+      'const page = await <Page />;',
+      'if (loading) return null; else <Spinner />;',
+      'const hidden = !<Banner />;',
+      'const label = prefix + <b>bold</b>;',
+      'const kind = typeof <Icon />;',
+      'void <Toast />;',
+      'if (ready) {}<div className="after-block" />',
     ];
     for (const source of jsx) {
       assert.equal(mayContainJsx(source), true, source);
@@ -377,6 +384,8 @@ describe('mayContainJsx', () => {
       '// <input type="password" name="pw">',
       "const stripped = s.replace(/<\\/?[a-z][^>]*>/gi, '');",
       'const shifted = x << 2;',
+      'const ok = !a<b && a+b<c;',
+      'const wait = await fetchCount() < limit;',
     ];
     for (const source of plain) {
       assert.equal(mayContainJsx(source), false, source);

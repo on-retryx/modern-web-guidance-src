@@ -668,6 +668,19 @@ void test('scanFiles: element rules scan JSX in .js/.mjs/.cjs, not in the TS fam
     );
     assert.deepEqual(findings.map((f) => f.file), ['src/Login.js']);
   });
+
+  await t.test('known limitation: skips .js JSX with no detectable lead-in', () => {
+    // A comment between `return` and the tag hides the expression position from
+    // the cheap pre-parse check, so the .js file gets no element findings.
+    const hidden = [
+      'export function Login() {',
+      '  return /* sign-in */ <input type="password" />;',
+      '}',
+      '',
+    ].join('\n');
+    assert.equal(scanFiles(new Map([['src/Login.jsx', hidden]]), [passwordRule]).length, 1);
+    assert.deepEqual(scanFiles(new Map([['src/Login.js', hidden]]), [passwordRule]), []);
+  });
 });
 
 void test('sfc and multi-block scanning: Vue, Svelte, Astro, inline HTML, and Lit CSS', async (t) => {
