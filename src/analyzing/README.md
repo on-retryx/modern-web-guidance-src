@@ -180,7 +180,7 @@ export interface AnalyzerRule {
 ### Supported Matcher Kinds
 
 1. **`JsRuleMatcher` (`kind: 'js'`):** Analyzes JavaScript and TypeScript files using `ts-morph` AST navigation.
-2. **`DomRuleMatcher` (`kind: 'dom'`):** Inspects HTML templates and JSX/TSX elements for tag names, attribute combinations, and missing modern platform attributes.
+2. **`DomRuleMatcher` (`kind: 'dom'`):** Inspects HTML templates and JSX elements for tag names, attribute combinations, and missing modern platform attributes. JSX is scanned in `.jsx`/`.tsx` files and in `.js`/`.mjs`/`.cjs` files that contain JSX (`JSX_RULE_EXTENSIONS`); `.ts`/`.mts`/`.cts` are excluded because `<T>expr` is a type assertion there.
 3. **`CssRuleMatcher` (`kind: 'css'`):** Checks CSS rules and style declarations for obsolete workarounds (e.g. manual `-webkit-line-clamp` fallbacks).
 4. **`DependencyRuleMatcher` (`kind: 'dependency'`):** Flags obsolete third-party npm packages whose functionality has been superseded by native web platform APIs.
 
