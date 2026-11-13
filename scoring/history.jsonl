@@ -1,0 +1,1 @@
+{"feature":"retrieve-suggestions","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":0,"base":"a167f53f","note":"Solid focused change; 33/33 own typos ranked top-1; minor: unbounded id echo, '/' says 'No IDs provided', any-prefix stripping, no ranker edge tests","at":"2026-11-13T19:46:42.722Z"}

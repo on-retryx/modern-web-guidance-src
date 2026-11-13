@@ -9,7 +9,8 @@ import { spawnSync } from "node:child_process";
 import { join, dirname, basename } from "node:path";
 import { existsSync, fstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { retrieveUseCase, FeatureGateError } from "../rag/retrieve.ts";
+import { retrieveUseCase, FeatureGateError, UnknownGuideError } from "../rag/retrieve.ts";
+import { normalizeGuideId } from "../rag/guide-ids.ts";
 import { logToolResult } from "../rag/logger.ts";
 import { handleSetAllowOriginTrials, handleSetAllowVolatileFeatures } from "./set-allow-gate.ts";
 import { normalizeBaselineTarget, writeMwgrc } from "../core/mwgrc.ts";
@@ -177,6 +178,7 @@ async function main() {
             arg
               .split(/[\s,;]+/)
               .map(id => id.replace(/^["'\\]+|["'\\;]+$/g, "").trim())
+              .map(normalizeGuideId)
               .filter(id => Boolean(id) && !id.startsWith("-"))
           ),
         ]
@@ -198,7 +200,7 @@ async function main() {
         await getLogger().logRetrieveResult(Date.now() - startTime, true, id);
       } catch (error) {
         hasError = true;
-        if (error instanceof FeatureGateError) {
+        if (error instanceof FeatureGateError || error instanceof UnknownGuideError) {
           console.error(error.message);
         } else {
           console.error(`Retrieve failed for ${id}:`, error);

@@ -1,4 +1,5 @@
-import { getGuide, getUseCase } from "./guides.ts";
+import { getGuide, getUseCase, USE_CASES } from "./guides.ts";
+import { suggestGuideIds } from "./guide-ids.ts";
 import { logToolResult } from "./logger.ts";
 import { readMwgrc, normalizeBaselineTarget } from "../core/mwgrc.ts";
 import { FEATURE_GATES } from "../core/feature-gates.ts";
@@ -24,6 +25,23 @@ export class VolatileFeatureGateError extends FeatureGateError {
   constructor(message: string) {
     super(message, "allowVolatileFeatures");
     this.name = "VolatileFeatureGateError";
+  }
+}
+
+/** Thrown for a guide ID that does not exist; the message is concise and lists close matches. */
+export class UnknownGuideError extends Error {
+  readonly guideId: string;
+  readonly suggestions: string[];
+
+  constructor(guideId: string, suggestions: string[]) {
+    const hint = suggestions.length > 0 ? `Did you mean: ${suggestions.join(", ")}?` : "No similar guide IDs found.";
+    super(
+      `Unknown guide ID "${guideId}". ${hint}\n` +
+        `Run \`npx modern-web-guidance@latest search "<query>"\` to find valid guide IDs.`,
+    );
+    this.name = "UnknownGuideError";
+    this.guideId = guideId;
+    this.suggestions = suggestions;
   }
 }
 
@@ -88,7 +106,7 @@ function formatGateMessage({
 export async function retrieveUseCase(useCaseId: string, options?: { cwd?: string }): Promise<string> {
   const useCase = getUseCase(useCaseId);
   if (!useCase) {
-    throw new Error(`No guide found for use case: ${useCaseId}`);
+    throw new UnknownGuideError(useCaseId, suggestGuideIds(useCaseId, USE_CASES.map((u) => u.id)));
   }
 
   const originTrials = useCase.originTrials ?? [];
