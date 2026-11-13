@@ -219,6 +219,35 @@ void test('sfc-extractor: HTML comments', async (t) => {
     assert.deepEqual(styleBodies('index.html', html), ['.a {}', '.b {}', '.c {}', '.d {}']);
   });
 
+  await t.test('<!-- inside CDATA, bogus comments and other raw text elements is not a comment', () => {
+    const html = [
+      '<!DOCTYPE html "<!--">',
+      '<![CDATA[ <!-- ]]>',
+      '<svg><![CDATA[ a > b <!-- ]]></svg>',
+      '<![if !IE]><style>.a {}</style><![endif]>',
+      '<xmp><!--</xmp>',
+      '<iframe srcdoc="x"><!--</iframe>',
+      '<noembed><!--</noembed><noframes><!--</noframes>',
+      '<script type="text/template"><p><!--</p></script>',
+      '<style>.b {}</style>',
+      '<!-- <style>.c {}</style> -->',
+    ].join('\n');
+    assert.deepEqual(styleBodies('index.html', html), ['.a {}', '.b {}']);
+    assert.deepEqual(scriptBodies('index.html', html), []);
+  });
+
+  await t.test('tag names are case-insensitive and end tags may hold whitespace', () => {
+    const html = [
+      '<SCRIPT>document.write("<!--");</SCRIPT >',
+      '<STYLE>.a {}</STYLE >',
+      '<!-- <STYLE>.b {}</STYLE> -->',
+      '<script>legacy();</script\t>',
+      '<!-- <script>old();</script> -->',
+    ].join('\n');
+    assert.deepEqual(styleBodies('index.html', html), ['.a {}']);
+    assert.deepEqual(scriptBodies('index.html', html), ['document.write("<!--");', 'legacy();']);
+  });
+
   await t.test('an unterminated comment hides only what follows it', () => {
     const html = '<style>.a {}</style>\n<!-- <style>.b {}</style>';
     assert.deepEqual(styleBodies('index.html', html), ['.a {}']);

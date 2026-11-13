@@ -16,8 +16,8 @@ const NON_JS_SCRIPT_TYPES: ReadonlySet<string> = new Set([
   'speculationrules',
 ]);
 
-const SCRIPT_TAG_REGEX = /<script(?=[\s/>])([^>]*)>([\s\S]*?)<\/script>/gi;
-const STYLE_TAG_REGEX = /<style(?=[\s/>])([^>]*)>([\s\S]*?)<\/style>/gi;
+const SCRIPT_TAG_REGEX = /<script(?=[\s/>])([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const STYLE_TAG_REGEX = /<style(?=[\s/>])([^>]*)>([\s\S]*?)<\/style\s*>/gi;
 const ASTRO_FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---/;
 const TAG_ATTR_REGEX = /([a-zA-Z0-9_:-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
 const GLIMMER_COMMENT_REGEX = /\{\{~?!--[\s\S]*?--~?\}\}|\{\{~?![\s\S]*?\}\}/g;
@@ -176,13 +176,22 @@ export function blankRanges(
   return result;
 }
 
-// The raw text (`script`, `style`) and escapable raw text (`textarea`, `title`) elements:
-// the HTML tokenizer reads their content as text up to the matching end tag.
+// Elements whose content the HTML tokenizer reads as text up to the matching end tag (RCDATA,
+// RAWTEXT and script data). `noscript` is left out: its content is only text while scripting
+// is enabled, i.e. when it is not rendered; where it renders, its comments are comments.
 const RAW_TEXT_END_TAG_REGEXES: ReadonlyMap<string, RegExp> = new Map(
-  ['script', 'style', 'textarea', 'title'].map((name) => [name, new RegExp(`</${name}[\\s/>]`, 'gi')]),
+  ['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes'].map((name) => [
+    name,
+    new RegExp(`</${name}[\\t\\n\\f\\r />]`, 'gi'),
+  ]),
 );
-const TAG_NAME_REGEX = /[a-zA-Z][^\s/>]*/y;
+const TAG_NAME_REGEX = /[a-zA-Z][^\t\n\f\r />]*/y;
 const COMMENT_END_REGEX = /--!?>/g;
+
+/** HTML ASCII whitespace: tab, LF, FF, CR and space. */
+function isHtmlSpace(ch: string | undefined): boolean {
+  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f';
+}
 
 /** Index just past the `>` that closes a tag, skipping quoted attribute values. */
 function findTagEnd(markup: string, index: number): number {
@@ -194,7 +203,7 @@ function findTagEnd(markup: string, index: number): number {
     }
     i++;
     if (ch === '=') {
-      while (i < markup.length && /\s/.test(markup[i] ?? '')) {
+      while (isHtmlSpace(markup[i])) {
         i++;
       }
       const quote = markup[i];
@@ -225,13 +234,30 @@ function findCommentEnd(markup: string, bodyStart: number): number {
 }
 
 /**
+ * Index just past a `<!…>` or `<?…>` that is not a comment. A bogus comment or DOCTYPE ends at
+ * the next `>`, a CDATA section (SVG/MathML) at `]]>`, and PHP code or an XML declaration at
+ * `?>`. Unterminated, it runs to the end: that can leave later comments in place, never hide
+ * live code.
+ */
+function findDeclarationEnd(markup: string, lt: number): number {
+  let terminator = '>';
+  if (markup.startsWith('<![CDATA[', lt)) {
+    terminator = ']]>';
+  } else if (markup[lt + 1] === '?') {
+    terminator = '?>';
+  }
+  const close = markup.indexOf(terminator, lt + 2);
+  return close === -1 ? markup.length : close + terminator.length;
+}
+
+/**
  * Finds the `<!-- … -->` comments of HTML-like markup from `fromIndex` on, in one linear,
  * in-order pass that follows the HTML tokenizer closely enough not to mistake live code for
  * a comment: `<!--` inside a quoted attribute value or the text of a raw text element (e.g. a
  * legacy `<script><!-- … //--></script>` wrapper) does not open one, and a comment ends at
  * the first `-->` (so downlevel-revealed `<!--[if !IE]><!-->…<!--<![endif]-->` leaves its
- * content live). An unterminated comment runs to the end, as in the tokenizer.
- * `<?…?>` islands (PHP, XML declarations) are skipped whole, to `?>` or the end.
+ * content live). An unterminated comment runs to the end, as in the tokenizer. Other `<!…>`
+ * and `<?…?>` constructs (DOCTYPE, CDATA, PHP code) are skipped whole.
  */
 function findHtmlCommentRanges(markup: string, fromIndex = 0): { start: number; end: number }[] {
   const ranges: { start: number; end: number }[] = [];
@@ -246,16 +272,15 @@ function findHtmlCommentRanges(markup: string, fromIndex = 0): { start: number; 
       ranges.push({ start: lt, end: i });
       continue;
     }
-    if (markup.startsWith('<?', lt)) {
-      const close = markup.indexOf('?>', lt + 2);
-      i = close === -1 ? markup.length : close + 2;
+    if (markup[lt + 1] === '!' || markup[lt + 1] === '?') {
+      i = findDeclarationEnd(markup, lt);
       continue;
     }
     const isEndTag = markup[lt + 1] === '/';
     TAG_NAME_REGEX.lastIndex = isEndTag ? lt + 2 : lt + 1;
     const tagName = TAG_NAME_REGEX.exec(markup)?.[0];
     if (!tagName) {
-      // Not a tag (`a < b`, `<!DOCTYPE>`): plain text.
+      // Not a tag (`a < b`): plain text.
       i = lt + 1;
       continue;
     }
@@ -269,16 +294,24 @@ function findHtmlCommentRanges(markup: string, fromIndex = 0): { start: number; 
   return ranges;
 }
 
+// The DOM, script and style passes over a file all need the same comment-blanked markup.
+let lastBlankedComments: { relPath: string; markup: string; blanked: string } | undefined;
+
 /**
  * Markup of a file with its HTML comments blanked (offsets and newlines preserved), so that
  * commented-out `<script>`/`<style>` blocks are not extracted. Astro frontmatter is not markup
  * and is left as is.
  */
 function blankHtmlComments(relPath: string, markup: string): string {
+  if (lastBlankedComments?.relPath === relPath && lastBlankedComments.markup === markup) {
+    return lastBlankedComments.blanked;
+  }
   const frontmatterEnd = relPath.toLowerCase().endsWith('.astro')
     ? (ASTRO_FRONTMATTER_REGEX.exec(markup)?.[0].length ?? 0)
     : 0;
-  return blankRanges(markup, findHtmlCommentRanges(markup, frontmatterEnd));
+  const blanked = blankRanges(markup, findHtmlCommentRanges(markup, frontmatterEnd));
+  lastBlankedComments = { relPath, markup, blanked };
+  return blanked;
 }
 
 /**
