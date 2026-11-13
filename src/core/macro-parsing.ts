@@ -146,10 +146,15 @@ export function parseArguments(argsString: string): string[] {
   return args;
 }
 
+// Macros whose first argument is a feature ID
+const TRANSCLUSION_FEATURE_MACROS = ["FEATURE", "FEATURE_FALLBACKS", "FEATURE_ISSUES"];
+const ALL_FEATURE_MACROS = [...TRANSCLUSION_FEATURE_MACROS, "BASELINE_STATUS"];
+
 /**
- * Extracts all feature IDs referenced in transclusion macros (FEATURE, FEATURE_FALLBACKS, FEATURE_ISSUES, and INCLUDE).
+ * Extracts the feature IDs referenced (outside {# ... #} comments) by the given feature macros,
+ * whose first argument is a feature ID, and by INCLUDE macros of features/<id>.md files.
  */
-export function getTranscludedFeatureIds(content: string): string[] {
+function collectFeatureIds(content: string, featureMacros: readonly string[]): string[] {
   if (!content) return [];
   const featureIds = new Set<string>();
   const stripped = stripComments(content);
@@ -161,7 +166,7 @@ export function getTranscludedFeatureIds(content: string): string[] {
     const firstArg = args[0];
     if (!firstArg) continue;
 
-    if (macroName === "FEATURE" || macroName === "FEATURE_FALLBACKS" || macroName === "FEATURE_ISSUES") {
+    if (featureMacros.includes(macroName)) {
       featureIds.add(firstArg.trim());
     } else if (macroName === "INCLUDE") {
       // Matches bare features/<id>.md or relative paths like ../../features/<id>.md (with optional #section)
@@ -173,4 +178,18 @@ export function getTranscludedFeatureIds(content: string): string[] {
   }
 
   return Array.from(featureIds);
+}
+
+/**
+ * Extracts all feature IDs referenced in transclusion macros (FEATURE, FEATURE_FALLBACKS, FEATURE_ISSUES, and INCLUDE).
+ */
+export function getTranscludedFeatureIds(content: string): string[] {
+  return collectFeatureIds(content, TRANSCLUSION_FEATURE_MACROS);
+}
+
+/**
+ * Extracts all feature IDs referenced in macros: the transclusion macros plus BASELINE_STATUS.
+ */
+export function getReferencedFeatureIds(content: string): string[] {
+  return collectFeatureIds(content, ALL_FEATURE_MACROS);
 }
