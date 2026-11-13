@@ -14,7 +14,8 @@
  */
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { type Scorecard, toCredit } from './lib.ts';
@@ -193,7 +194,46 @@ function parseFailingTests(output: string): string[] {
   return [...names];
 }
 
+/**
+ * Gates are serialized machine-wide: concurrent full test runs from several
+ * worktrees starve each other on small machines and produce spurious timeouts.
+ */
+const GATES_LOCK = path.join(tmpdir(), 'mwg-scoring-gates.lock');
+const STALE_LOCK_MS = 30 * 60_000;
+
+function acquireGatesLock(): void {
+  const sleeper = new Int32Array(new SharedArrayBuffer(4));
+  let announced = false;
+  for (;;) {
+    try {
+      mkdirSync(GATES_LOCK);
+      writeFileSync(path.join(GATES_LOCK, 'owner'), `${process.pid} ${ROOT}\n`);
+      return;
+    } catch {
+      try {
+        if (Date.now() - statSync(GATES_LOCK).mtimeMs > STALE_LOCK_MS) rmSync(GATES_LOCK, { recursive: true, force: true });
+      } catch {
+        // Lock vanished between checks; retry.
+      }
+      if (!announced) {
+        console.error(`Waiting for another gates run to finish (${GATES_LOCK})...`);
+        announced = true;
+      }
+      Atomics.wait(sleeper, 0, 0, 5000);
+    }
+  }
+}
+
 function cmdGates(args: string[]): GateResult {
+  acquireGatesLock();
+  try {
+    return runGates(args);
+  } finally {
+    rmSync(GATES_LOCK, { recursive: true, force: true });
+  }
+}
+
+function runGates(args: string[]): GateResult {
   const skipTests = args.includes('--skip-tests');
   const typecheck = run('pnpm', ['typecheck']).status === 0;
   const lint = run('pnpm', ['lint']);
