@@ -28,17 +28,26 @@ export class VolatileFeatureGateError extends FeatureGateError {
   }
 }
 
+const MAX_ECHOED_ID_LENGTH = 80;
+
+/** Concise error for a guide ID that does not exist, listing close matches (if any). */
+export function formatUnknownGuideMessage(guideId: string, suggestions: string[]): string {
+  const echoedId =
+    guideId.length > MAX_ECHOED_ID_LENGTH ? `${guideId.slice(0, MAX_ECHOED_ID_LENGTH - 1)}…` : guideId;
+  const hint = suggestions.length > 0 ? `Did you mean: ${suggestions.join(", ")}?` : "No similar guide IDs found.";
+  return (
+    `Unknown guide ID "${echoedId}". ${hint}\n` +
+    `Run \`npx modern-web-guidance@latest search "<query>"\` to find valid guide IDs.`
+  );
+}
+
 /** Thrown for a guide ID that does not exist; the message is concise and lists close matches. */
 export class UnknownGuideError extends Error {
   readonly guideId: string;
   readonly suggestions: string[];
 
   constructor(guideId: string, suggestions: string[]) {
-    const hint = suggestions.length > 0 ? `Did you mean: ${suggestions.join(", ")}?` : "No similar guide IDs found.";
-    super(
-      `Unknown guide ID "${guideId}". ${hint}\n` +
-        `Run \`npx modern-web-guidance@latest search "<query>"\` to find valid guide IDs.`,
-    );
+    super(formatUnknownGuideMessage(guideId, suggestions));
     this.name = "UnknownGuideError";
     this.guideId = guideId;
     this.suggestions = suggestions;
@@ -106,7 +115,10 @@ function formatGateMessage({
 export async function retrieveUseCase(useCaseId: string, options?: { cwd?: string }): Promise<string> {
   const useCase = getUseCase(useCaseId);
   if (!useCase) {
-    throw new UnknownGuideError(useCaseId, suggestGuideIds(useCaseId, USE_CASES.map((u) => u.id)));
+    throw new UnknownGuideError(
+      useCaseId,
+      suggestGuideIds(useCaseId, USE_CASES.map((u) => u.id))
+    );
   }
 
   const originTrials = useCase.originTrials ?? [];

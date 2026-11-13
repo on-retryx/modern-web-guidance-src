@@ -131,6 +131,32 @@ describe('modern-web CLI', () => {
     assert.doesNotMatch(hopelessRes.stderr, /^\s+at\s/m);
   });
 
+  it('reports IDs that normalize to nothing as unknown instead of as missing', () => {
+    for (const input of ['/', '.md']) {
+      const res = runCLI(['retrieve', input]);
+      assert.strictEqual(res.status, 1);
+      assert.strictEqual(res.stdout, '');
+      assert.ok(res.stderr.includes(`Unknown guide ID "${input}". No similar guide IDs found.`), res.stderr);
+      assert.ok(!res.stderr.includes('No IDs provided'));
+    }
+
+    const mixedRes = runCLI(['retrieve', `${smallUngated},/`]);
+    assert.strictEqual(mixedRes.status, 1);
+    assert.ok(mixedRes.stdout.includes(`--- Guide for ${smallUngated} ---`));
+  });
+
+  it('ignores flag-like tokens and keeps unknown-ID errors short for very long input', () => {
+    const plainRes = runCLI(['retrieve', smallUngated]);
+    const flagRes = runCLI(['retrieve', `${smallUngated} --Foo`]);
+    assert.strictEqual(flagRes.status, 0);
+    assert.strictEqual(flagRes.stdout, plainRes.stdout);
+
+    const longRes = runCLI(['retrieve', 'q'.repeat(5000)]);
+    assert.strictEqual(longRes.status, 1);
+    const longestLine = Math.max(...longRes.stderr.split('\n').map((line) => line.length));
+    assert.ok(longestLine < 200, `longest stderr line is ${longestLine} chars`);
+  });
+
   it('automatically saves large (> 9.5 KB) output to a temporary UTF-8 file while keeping <= 9.5 KB output inline', () => {
     const smallRes = runCLI(['retrieve', smallUngated]);
     assert.strictEqual(smallRes.status, 0);

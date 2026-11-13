@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import child_process from 'node:child_process';
-import { retrieveUseCase, OriginTrialGateError, VolatileFeatureGateError, FeatureGateError, UnknownGuideError } from './retrieve.ts';
+import { retrieveUseCase, OriginTrialGateError, VolatileFeatureGateError, FeatureGateError, UnknownGuideError, formatUnknownGuideMessage } from './retrieve.ts';
 import { searchUseCases } from './search.ts';
 import { USE_CASES } from './guides.ts';
 
@@ -262,5 +262,13 @@ describe('retrieveUseCase with unknown IDs', () => {
         return true;
       }
     );
+  });
+
+  test('truncates very long IDs in the error message', () => {
+    const message = formatUnknownGuideMessage('x'.repeat(5000), []);
+    const firstLine = message.split('\n')[0];
+    assert.ok(firstLine.includes(`"${'x'.repeat(79)}…"`), firstLine);
+    assert.ok(firstLine.length < 140, `first line is ${firstLine.length} chars`);
+    assert.ok(formatUnknownGuideMessage('x'.repeat(80), []).includes(`"${'x'.repeat(80)}"`));
   });
 });
