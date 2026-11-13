@@ -1,0 +1,1 @@
+{"feature":"html-comment-blocks","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":0,"base":"88207597","note":"Correct, linear tokenizer-like blanking; minor spec gaps (bogus <!..>/CDATA, xmp/iframe/noembed raw text), blankHtmlComments recomputed per extractor","at":"2026-11-13T19:42:24.069Z"}
