@@ -263,7 +263,8 @@ async function main() {
       console.error("Install failed:", result.error);
       process.exit(1);
     }
-    process.exit(result.status ?? 0);
+    // status is null when npx was killed by a signal: report failure, not success.
+    process.exit(result.status ?? 1);
   } else if (command === "update") {
     const startTime = Date.now();
     const skills = getOurCLIAdjacentSkillIDs();
@@ -275,7 +276,9 @@ async function main() {
     await getLogger().logToolCommand(Date.now() - startTime, success, CommandType.UPDATE);
     if (result.error) {
       console.error("Update failed:", result.error);
+      process.exit(1);
     }
+    process.exit(result.status ?? 1);
   } else if (command === "set-baseline") {
     const normalized = normalizeBaselineTarget(arg);
     if (!normalized) {
@@ -304,7 +307,9 @@ async function main() {
     await getLogger().logToolCommand(Date.now() - startTime, success, CommandType.UNINSTALL);
     if (result.error) {
       console.error("Uninstall failed:", result.error);
+      process.exit(1);
     }
+    process.exit(result.status ?? 1);
   } else {
     console.error(`Unknown command: ${command}`);
     printUsage();
