@@ -331,4 +331,26 @@ describe('modern-web CLI', () => {
       fs.rmSync(tempBinDir, { recursive: true, force: true });
     }
   });
+
+  it('exits 1 when npx is killed by a signal or cannot be spawned', () => {
+    const signalBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mwg-npx-test-'));
+    const emptyBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mwg-npx-test-'));
+    fs.writeFileSync(path.join(signalBinDir, 'npx'), '#!/bin/sh\nkill -TERM $$\n', { mode: 0o755 });
+
+    try {
+      for (const command of ['install', 'update', 'uninstall']) {
+        for (const binDir of [signalBinDir, emptyBinDir]) {
+          const result = spawnSync(process.execPath, [scriptPath, command], {
+            encoding: 'utf8',
+            env: { ...process.env, PATH: binDir, NO_COLOR: '1', DISABLE_TELEMETRY: '1' },
+          });
+          const reason = binDir === signalBinDir ? 'npx is killed by a signal' : 'npx cannot be spawned';
+          assert.strictEqual(result.status, 1, `${command} should exit 1 when ${reason}`);
+        }
+      }
+    } finally {
+      fs.rmSync(signalBinDir, { recursive: true, force: true });
+      fs.rmSync(emptyBinDir, { recursive: true, force: true });
+    }
+  });
 });
