@@ -1,0 +1,1 @@
+{"feature":"sri-scheme","auto":100,"review":84,"gatesPassed":true,"final":95.2,"improved":true,"previousBest":0,"base":"666a60cd","note":"self-review: scheme-optional host regex + scheme-less fast tokens; integrity branch covers //; rubric mentions // and http; test added","at":"2026-11-15T06:13:30.451Z"}
