@@ -1,0 +1,1 @@
+{"feature":"max-files","auto":100,"review":87,"gatesPassed":true,"final":96.1,"improved":true,"previousBest":0,"base":"a9a0f233","note":"self-review: reuses existing maxFiles plumbing; validation via errorCliResult (text+json); truncation reporting left to #3587; test + README row","at":"2026-11-15T06:13:30.122Z"}
