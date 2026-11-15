@@ -64,4 +64,17 @@ void test('secure-external-subresources DOM matcher', async (t) => {
     const matches = scanHtml('modern.html', html, [secureExternalSubresourcesMatcher]);
     assert.equal(matches.length, 0);
   });
+
+  await t.test('flags protocol-relative and http URLs like https', () => {
+    for (const tag of [
+      '<script src="//code.jquery.com/jquery-3.7.1.min.js"></script>',
+      '<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">',
+      '<script src="http://code.jquery.com/jquery-1.12.4.min.js"></script>',
+      '<script src="//cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js" integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"></script>',
+      '<script src="http://static.example.com/app.js" integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"></script>',
+    ]) {
+      const matches = scanHtml('legacy.html', `<head>\n${tag}\n</head>`, [secureExternalSubresourcesMatcher]);
+      assert.equal(matches.length, 1, tag);
+    }
+  });
 });

@@ -11,7 +11,7 @@ const MAX_HTML_LINE_LENGTH = 1200;
 const matchedContexts = new WeakSet<DomMatcherContext>();
 
 const KNOWN_PUBLIC_CDN_HOST_REGEX =
-  /^https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|code\.jquery\.com|maxcdn\.bootstrapcdn\.com|stackpath\.bootstrapcdn\.com|ajax\.googleapis\.com)\//i;
+  /^(?:https?:)?\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|code\.jquery\.com|maxcdn\.bootstrapcdn\.com|stackpath\.bootstrapcdn\.com|ajax\.googleapis\.com)\//i;
 
 const EXACT_VERSION_SEGMENT_REGEX =
   /(?:\/|@|-)v?\d+\.\d+\.\d+(?:-[0-9a-zA-Z.-]+)?(?:\/|\.|-)/;
@@ -45,13 +45,13 @@ export const secureExternalSubresourcesMatcher: DomRuleMatcher = {
   kind: 'dom',
   selector: 'script[src], link[rel="stylesheet"][href]',
   fastTokens: [
-    'https://cdnjs.cloudflare.com/',
-    'https://cdn.jsdelivr.net/',
-    'https://unpkg.com/',
-    'https://code.jquery.com/',
-    'https://maxcdn.bootstrapcdn.com/',
-    'https://stackpath.bootstrapcdn.com/',
-    'https://ajax.googleapis.com/',
+    '//cdnjs.cloudflare.com/',
+    '//cdn.jsdelivr.net/',
+    '//unpkg.com/',
+    '//code.jquery.com/',
+    '//maxcdn.bootstrapcdn.com/',
+    '//stackpath.bootstrapcdn.com/',
+    '//ajax.googleapis.com/',
     'integrity',
   ],
   skipIfHasSpread: true,
@@ -105,7 +105,7 @@ export const secureExternalSubresourcesMatcher: DomRuleMatcher = {
       const integrityVal = (element.getAttribute('integrity') ?? '').trim();
       if (
         !SRI_DIGEST_PREFIX_REGEX.test(integrityVal) ||
-        !/^https:\/\//i.test(rawUrl)
+        !/^(?:https?:)?\/\//i.test(rawUrl)
       ) {
         return null;
       }
@@ -136,8 +136,8 @@ export const secureExternalSubresourcesRule: AnalyzerRule = {
   matcher: secureExternalSubresourcesMatcher,
   verifierRubric: {
     keepWhen: [
-      'An HTML or JSX <script src="https://..."> or <link rel="stylesheet" href="https://..."> loads an immutable, version-pinned asset from a public third-party CDN (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, code.jquery.com, maxcdn.bootstrapcdn.com, stackpath.bootstrapcdn.com, ajax.googleapis.com) without an integrity attribute.',
-      'An external cross-origin <script src="https://..."> or <link rel="stylesheet" href="https://..."> specifies integrity="sha..." but omits the required crossorigin="anonymous" attribute.',
+      'An HTML or JSX <script src="https://..."> or <link rel="stylesheet" href="https://..."> (or a protocol-relative "//..." or "http://..." URL) loads an immutable, version-pinned asset from a public third-party CDN (cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, code.jquery.com, maxcdn.bootstrapcdn.com, stackpath.bootstrapcdn.com, ajax.googleapis.com) without an integrity attribute.',
+      'An external cross-origin <script src="https://..."> or <link rel="stylesheet" href="https://..."> (or a protocol-relative "//..." or "http://..." URL) specifies integrity="sha..." but omits the required crossorigin="anonymous" attribute.',
     ],
     dropWhen: [
       'The <script> or <link> element already includes both an integrity="sha256-... | sha384-... | sha512-..." attribute and a crossorigin attribute.',
