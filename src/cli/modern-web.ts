@@ -17,7 +17,8 @@ import { ClearcutLogger } from "./telemetry/clearcut-logger.ts";
 import { CommandType } from "./telemetry/types.ts";
 import { getVersion } from "./version.ts";
 import { getSkillUpdateLevel, isFrozenClaudeMarketplaceVersion } from "./skill-version.ts";
-import { USE_CASES } from "../rag/guides.ts";
+import { USE_CASES, getUseCasesByCategory } from "../rag/guides.ts";
+import { CATEGORIES, isKnownCategory } from "../core/categories.ts";
 import { determineAgent, KNOWN_AGENTS } from "./telemetry/detect-agent.ts";
 
 const MAX_INLINE_STDOUT_BYTES = 9500;
@@ -28,6 +29,8 @@ const { values, positionals } = parseArgs({
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
     choose: { type: "boolean" },
+    category: { type: "string", short: "c" },
+    categories: { type: "boolean" },
     "skill-version": { type: "string" },
   },
   allowPositionals: true,
@@ -65,6 +68,8 @@ Usage: modern-web-guidance <command> [args]
 Commands:
   search <query>            Search use cases by English query
   list                      List all available use cases
+    -c, --category <slugs>  Only list use cases in these categories, comma-separated
+    --categories            List the categories and their use case counts
   retrieve <ids>            Retrieve use case(s) by ID(s), comma-separated
   legacy-scan [path] [options]  Analyze codebase for legacy web platform patterns
   set-allow-origin-trials   Opt in to experimental Origin Trial guidance
@@ -159,8 +164,33 @@ async function main() {
   } else if (command === "list") {
     const startTime = Date.now();
     try {
-      // Compact format: return only id and description to minimize token usage, one per line.
-      const jsonLines = USE_CASES.map(({ id, description }) => JSON.stringify({ id, description }));
+      // Slugs may be comma- or space-separated, so `-c forms performance` lists both.
+      const categories = values.category === undefined
+        ? undefined
+        : `${typeof values.category === "string" ? values.category : ""} ${arg}`.split(/[\s,]+/).filter(Boolean);
+      const unknown = categories?.filter(c => !isKnownCategory(c)) ?? [];
+      let usageError: string | undefined;
+      if (categories && values.categories) usageError = "--category and --categories cannot be used together.";
+      else if (categories?.length === 0) usageError = "No category provided.";
+      else if (unknown.length > 0) usageError = `Unknown category: ${unknown.join(", ")}.`;
+      if (usageError) {
+        await getLogger().logToolCommand(Date.now() - startTime, false, CommandType.LIST);
+        console.error(`${usageError} Valid categories: ${CATEGORIES.map(c => c.slug).join(", ")}`);
+        process.exit(1);
+      }
+      let jsonLines: string[];
+      if (values.categories) {
+        // Largest categories first; ties keep the CATEGORIES order.
+        jsonLines = CATEGORIES
+          .map(({ slug }) => ({ category: slug, count: getUseCasesByCategory(slug).length }))
+          .filter(({ count }) => count > 0)
+          .sort((a, b) => b.count - a.count)
+          .map(entry => JSON.stringify(entry));
+      } else {
+        const useCases = categories ? USE_CASES.filter(u => categories.includes(u.category)) : USE_CASES;
+        // Compact format: return only id and description to minimize token usage, one per line.
+        jsonLines = useCases.map(({ id, description }) => JSON.stringify({ id, description }));
+      }
       console.log("[" + jsonLines.join(",\n") + "]");
       await getLogger().logToolCommand(Date.now() - startTime, true, CommandType.LIST);
     } catch (error) {

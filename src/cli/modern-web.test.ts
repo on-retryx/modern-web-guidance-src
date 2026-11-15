@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { USE_CASES } from '../rag/guides.ts';
+import { CATEGORIES } from '../core/categories.ts';
 import { DETECTED_AGENT_ENV_VARS } from './telemetry/detect-agent.ts';
 
 const scriptPath = path.resolve(import.meta.dirname, './modern-web.ts');
@@ -77,6 +78,65 @@ describe('modern-web CLI', () => {
     // Check one line per item formatting
     assert.strictEqual(trimmed.split('\n').length, catalog.length, 'Each item should be on its own line');
     assert.ok(trimmed.includes('accessible-error-announcement'));
+  });
+
+  const idsIn = (...categories: string[]) =>
+    USE_CASES.filter((u) => categories.includes(u.category)).map((u) => u.id);
+  const listedIds = (args: string[]) => {
+    const res = runCLI(['list', ...args]);
+    assert.strictEqual(res.status, 0, res.stderr);
+    return JSON.parse(res.stdout).map((u: { id: string }) => u.id);
+  };
+  const assertCategoryError = (args: string[], message: RegExp) => {
+    const res = runCLI(['list', ...args]);
+    assert.strictEqual(res.status, 1);
+    assert.strictEqual(res.stdout, '');
+    assert.match(res.stderr, message);
+    assert.match(res.stderr, /Valid categories: .*\bforms\b/);
+  };
+
+  it('filters list by --category, --category= and -c', () => {
+    assert.deepStrictEqual(listedIds(['--category', 'forms']), idsIn('forms'));
+    assert.deepStrictEqual(listedIds(['--category=css']), idsIn('css'));
+    assert.deepStrictEqual(listedIds(['-c', 'forms']), idsIn('forms'));
+  });
+
+  it('lists multiple categories in catalog order without duplicates', () => {
+    assert.deepStrictEqual(listedIds(['--category', 'performance,forms']), idsIn('forms', 'performance'));
+    assert.deepStrictEqual(listedIds(['--category', 'forms,forms']), idsIn('forms'));
+    assert.deepStrictEqual(listedIds(['-c', 'forms', 'performance']), idsIn('forms', 'performance'));
+  });
+
+  it('rejects unknown categories, including uppercase slugs, and lists the valid ones', () => {
+    assertCategoryError(['--category', 'modals'], /Unknown category: modals\./);
+    assertCategoryError(['--category', 'forms,modals,widgets'], /Unknown category: modals, widgets\./);
+    assertCategoryError(['--category', 'Forms'], /Unknown category: Forms\./);
+  });
+
+  it('rejects a missing or empty --category value', () => {
+    for (const args of [['--category'], ['--category='], ['--category', ','], ['-c']]) {
+      assertCategoryError(args, /No category provided\./);
+    }
+  });
+
+  it('rejects --category combined with --categories', () => {
+    assertCategoryError(['--categories', '-c', 'forms'], /--category and --categories cannot be used together\./);
+  });
+
+  it('summarizes categories with counts, largest first and ties in CATEGORIES order', () => {
+    const res = runCLI(['list', '--categories']);
+    assert.strictEqual(res.status, 0);
+    const counts = JSON.parse(res.stdout) as { category: string; count: number }[];
+    assert.strictEqual(res.stdout.trim().split('\n').length, counts.length, 'Each category should be on its own line');
+    assert.deepStrictEqual(
+      counts.map(({ category }) => category).sort(),
+      [...new Set(USE_CASES.map((u) => u.category))].sort()
+    );
+    for (const { category, count } of counts) assert.strictEqual(count, idsIn(category).length, category);
+    // Largest first; ties keep the CATEGORIES order.
+    const registry = CATEGORIES.map((c) => c.slug);
+    assert.deepStrictEqual(counts, [...counts].sort((a, b) =>
+      b.count - a.count || registry.indexOf(a.category) - registry.indexOf(b.category)));
   });
 
   it('retrieves multiple guides separated by commas, spaces, or escaped quotes and deduplicates IDs', () => {

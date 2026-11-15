@@ -25,7 +25,7 @@ npx -y modern-web-guidance@latest search "<query>" --skill-version SKILL_VERSION
 
 > **Note**: Returns `[{ "id", "description" }, ...]`. Judge results by their `description` fields:
 > - **Match found**: Call `retrieve` directly—do not also run `list`.
-> - **Weak or empty results**: If `search` returns `[]` or unrelated descriptions, **rephrase `search` once** using the concrete HTML/CSS/UI component noun or synonym (e.g., `dialog`, `modal`, `popover`, `table`, `form`) before falling back to `list` (or use `list` once for broad UI audits).
+> - **Weak or empty results**: If `search` returns `[]` or unrelated descriptions, **rephrase `search` once** using the concrete HTML/CSS/UI component noun or synonym (e.g., `dialog`, `modal`, `popover`, `table`, `form`) before falling back to `list` (or use `list` once for broad UI audits). To keep `list` short, run `list --categories` for the category slugs, then `list --category <category>` (comma-separate several).
 > - **Topic not covered**: If no `description` matches after rephrasing, proceed without retrieving unrelated guides.
 
 ### Step 2. Retrieve Best Practices
