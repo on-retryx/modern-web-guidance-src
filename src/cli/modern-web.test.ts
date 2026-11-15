@@ -79,6 +79,30 @@ describe('modern-web CLI', () => {
     assert.ok(trimmed.includes('accessible-error-announcement'));
   });
 
+  it('filters list by --category and summarizes with --categories', () => {
+    const idsIn = (...categories: string[]) =>
+      USE_CASES.filter((u) => categories.includes(u.category)).map((u) => u.id);
+
+    const forms = runCLI(['list', '--category', 'forms']);
+    assert.strictEqual(forms.status, 0);
+    assert.deepStrictEqual(JSON.parse(forms.stdout).map((u: { id: string }) => u.id), idsIn('forms'));
+
+    const multi = runCLI(['list', '--category=forms,performance']);
+    assert.strictEqual(multi.status, 0);
+    assert.deepStrictEqual(JSON.parse(multi.stdout).map((u: { id: string }) => u.id), idsIn('forms', 'performance'));
+
+    const unknown = runCLI(['list', '--category', 'modals']);
+    assert.strictEqual(unknown.status, 1);
+    assert.strictEqual(unknown.stdout, '');
+    assert.match(unknown.stderr, /Unknown category: modals\. Valid categories: .*\bforms\b/);
+
+    const summary = runCLI(['list', '--categories']);
+    assert.strictEqual(summary.status, 0);
+    const counts = JSON.parse(summary.stdout) as { category: string; count: number }[];
+    assert.strictEqual(counts.reduce((sum, c) => sum + c.count, 0), USE_CASES.length);
+    assert.deepStrictEqual(counts.find((c) => c.category === 'forms'), { category: 'forms', count: idsIn('forms').length });
+  });
+
   it('retrieves multiple guides separated by commas, spaces, or escaped quotes and deduplicates IDs', () => {
     const commaRes = runCLI(['retrieve', 'deprioritize-background-fetches,break-up-long-tasks']);
     assert.strictEqual(commaRes.status, 0);
