@@ -113,6 +113,7 @@ Options:
   --json                    Output findings as structured JSON for coding agents
   --guide <guideId>         Filter analysis to a specific guide ID
   --include-docs-and-tests  Include documentation, example, demo, and test files in analysis
+  --max-files <n>           Maximum number of files to scan in a directory (default: 5000)
   -h, --help                Show this help message
 `.trim();
 
@@ -305,6 +306,7 @@ export async function runAnalyzeCli(
         json: { type: 'boolean' },
         guide: { type: 'string' },
         'include-docs-and-tests': { type: 'boolean' },
+        'max-files': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
         'skill-version': { type: 'string' },
       },
@@ -319,7 +321,8 @@ export async function runAnalyzeCli(
         (a, i) =>
           !a.startsWith('-') &&
           cleanArgs[i - 1] !== '--skill-version' &&
-          cleanArgs[i - 1] !== '--guide',
+          cleanArgs[i - 1] !== '--guide' &&
+          cleanArgs[i - 1] !== '--max-files',
       ) || '.';
     return errorCliResult(error, isJson, targetDir);
   }
@@ -333,6 +336,11 @@ export async function runAnalyzeCli(
   const guideFilter = typeof parsed.values.guide === 'string' ? parsed.values.guide : undefined;
   const includeDocsAndTests = Boolean(parsed.values['include-docs-and-tests']);
   const targetDir = parsed.positionals[0] || '.';
+  const maxFilesArg = typeof parsed.values['max-files'] === 'string' ? parsed.values['max-files'] : undefined;
+  if (maxFilesArg !== undefined && !/^0*[1-9]\d*$/.test(maxFilesArg)) {
+    return errorCliResult(`--max-files must be a positive integer, got: ${maxFilesArg}`, isJson, targetDir);
+  }
+  const maxFiles = maxFilesArg !== undefined ? Number(maxFilesArg) : options?.maxFiles;
   const baseCwd = options?.cwd ?? process.cwd();
   const resolvedDir = resolve(baseCwd, targetDir);
 
@@ -369,7 +377,7 @@ export async function runAnalyzeCli(
       findings = scanFiles(files, activeRules, { includeDocsAndTests: true });
     } else {
       findings = await scanRepoFiles(resolvedDir, activeRules, {
-        maxFiles: options?.maxFiles,
+        maxFiles,
         includeDocsAndTests,
         stats: scanStats,
       });

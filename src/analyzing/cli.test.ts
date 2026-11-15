@@ -419,6 +419,28 @@ describe('runAnalyzeCli', () => {
     });
   });
 
+  it('limits directory scans with --max-files and rejects invalid values', async () => {
+    await withTempDir(async (testDir) => {
+      for (let i = 1; i <= 4; i++) {
+        const html = `<form action="/login${i}" method="POST">\n  <input type="password" name="password">\n</form>`;
+        await writeFile(join(testDir, `form${i}.html`), html, 'utf8');
+      }
+
+      const limited = await runAnalyzeCli([testDir, '--json', '--max-files', '2']);
+      assert.equal(limited.exitCode, 0);
+      assert.equal((JSON.parse(limited.output) as AnalyzeJsonOutput).totalFindings, 2);
+
+      const raised = await runAnalyzeCli([testDir, '--json', '--max-files=3'], { maxFiles: 1 });
+      assert.equal((JSON.parse(raised.output) as AnalyzeJsonOutput).totalFindings, 3);
+
+      for (const value of ['0', '-1', '1.5', 'abc', '1e3', '0x10']) {
+        const res = await runAnalyzeCli([testDir, '--json', `--max-files=${value}`]);
+        assert.equal(res.exitCode, 1);
+        assert.match((JSON.parse(res.output) as AnalyzeJsonOutput).error ?? '', /--max-files must be a positive integer/);
+      }
+    });
+  });
+
   describe('helper utilities and formatting', () => {
     it('elideText truncates and elides long lines gracefully', () => {
       assert.equal(elideText('short text', 20), 'short text');
