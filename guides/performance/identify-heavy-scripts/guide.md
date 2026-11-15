@@ -22,15 +22,16 @@ The `long-animation-frame` entry contains a `scripts` property which is an array
 ### Example of identifying the longest running scripts that contribute to long animation frames
 
 ```javascript
-// Keep a running total per script URL instead of storing every entry,
-// so memory and per-callback work stay small over a long session.
+// Keep a running total per script URL instead of storing every entry.
+// The map only grows with the number of distinct script URLs, so memory
+// and per-callback work stay small over a long session.
 const scriptTotals = new Map();
 
 const observer = new PerformanceObserver(list => {
-  // Group by sourceURL so you can identify which scripts contribute
-  // the most total time, even if each individual invocation is short.
   for (const entry of list.getEntries()) {
     for (const script of entry.scripts) {
+      // Group by sourceURL so you can identify which scripts contribute
+      // the most total time, even if each individual invocation is short.
       const totals = scriptTotals.get(script.sourceURL) ??
           { sourceURL: script.sourceURL, count: 0, totalDuration: 0 };
       totals.count++;

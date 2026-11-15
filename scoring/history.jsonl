@@ -1,1 +1,3 @@
 {"feature":"heavy-scripts","auto":100,"review":86,"gatesPassed":true,"final":95.8,"improved":true,"previousBest":0,"base":"7eee5d57","note":"self-review: Map of running totals, same table shape; DON'T bullet for DOM work in callback; snippet only, demo unchanged","at":"2026-11-15T06:13:30.276Z"}
+{"feature":"heavy-scripts","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":95.8,"base":"12cbd859","note":"independent Sonnet review","at":"2026-11-15T07:29:40.760Z"}
+{"feature":"heavy-scripts-v2","auto":100,"review":90,"gatesPassed":true,"final":97,"improved":true,"previousBest":0,"base":"b89ab6ec","note":"round-2 independent review","at":"2026-11-15T11:25:18.020Z"}
