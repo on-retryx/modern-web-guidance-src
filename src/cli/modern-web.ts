@@ -287,6 +287,7 @@ async function main() {
       console.error("Install failed:", result.error);
       process.exit(1);
     }
+    // status is null when npx was killed by a signal: report failure, not success.
     process.exit(result.status ?? 1);
   } else if (command === "update") {
     const startTime = Date.now();
