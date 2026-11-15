@@ -22,28 +22,26 @@ The `long-animation-frame` entry contains a `scripts` property which is an array
 ### Example of identifying the longest running scripts that contribute to long animation frames
 
 ```javascript
-// Accumulate all script entries across the page lifecycle so no
-// data is lost between observer callbacks.
-const allScripts = [];
+// Keep a running total per script URL instead of storing every entry.
+// The map only grows with the number of distinct script URLs, so memory
+// and per-callback work stay small over a long session.
+const scriptTotals = new Map();
 
 const observer = new PerformanceObserver(list => {
-  // Collect all script entries across frames to find the biggest offenders.
-  allScripts.push(...list.getEntries().flatMap(entry => entry.scripts));
-
-  // Group by sourceURL so you can identify which scripts contribute
-  // the most total time, even if each individual invocation is short.
-  const scriptSource = [...new Set(allScripts.map(script => script.sourceURL))];
-  const scriptsBySource = scriptSource.map(sourceURL => ([sourceURL,
-      allScripts.filter(script => script.sourceURL === sourceURL)
-  ]));
-  const processedScripts = scriptsBySource.map(([sourceURL, scripts]) => ({
-    sourceURL,
-    count: scripts.length,
-    totalDuration: scripts.reduce((subtotal, script) => subtotal + script.duration, 0)
-  }));
+  for (const entry of list.getEntries()) {
+    for (const script of entry.scripts) {
+      // Group by sourceURL so you can identify which scripts contribute
+      // the most total time, even if each individual invocation is short.
+      const totals = scriptTotals.get(script.sourceURL) ??
+          { sourceURL: script.sourceURL, count: 0, totalDuration: 0 };
+      totals.count++;
+      totals.totalDuration += script.duration;
+      scriptTotals.set(script.sourceURL, totals);
+    }
+  }
 
   // Only include scripts above a certain threshold to reduce noise.
-  const heavyScripts = processedScripts.filter(script => {
+  const heavyScripts = [...scriptTotals.values()].filter(script => {
     return script.totalDuration > 100;
   });
 
@@ -66,6 +64,7 @@ observer.observe({type: 'long-animation-frame', buffered: true});
 - **DO** prefer the Long Animation Frames API over alternatives like the JS Self-Profiling API, which carries higher runtime overhead.
 - **DO** summarize the key information as the Long Animation Frames API contains a lot of detail.
 - **DO** send the required information to an analytics service in production.
+- **DON'T** do heavy or synchronous DOM work, such as updating an on-page debug panel, inside the observer callback, as that work can itself cause another long animation frame.
 
 ## Browser support and fallback strategies
 
