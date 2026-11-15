@@ -309,4 +309,26 @@ describe('modern-web CLI', () => {
       fs.rmSync(tempBinDir, { recursive: true, force: true });
     }
   });
+
+  it('exits with the npx exit status when update or uninstall fails', () => {
+    const tempBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mwg-npx-test-'));
+    fs.writeFileSync(path.join(tempBinDir, 'npx'), '#!/bin/sh\nexit 3\n', { mode: 0o755 });
+
+    try {
+      for (const command of ['update', 'uninstall']) {
+        const result = spawnSync('node', [scriptPath, command], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${tempBinDir}:${process.env.PATH}`,
+            NO_COLOR: '1',
+            DISABLE_TELEMETRY: '1',
+          },
+        });
+        assert.strictEqual(result.status, 3, `${command} should exit with the npx status`);
+      }
+    } finally {
+      fs.rmSync(tempBinDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,0 +1,1 @@
+{"feature":"cli-exit-status","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":0,"base":"7d7a9d1e","note":"self-review: mirrors install's exit handling; signal kill exits 1 (also for install); 1 CLI test added","at":"2026-11-15T06:00:03.567Z"}
