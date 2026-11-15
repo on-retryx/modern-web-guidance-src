@@ -1,1 +1,3 @@
 {"feature":"max-files","auto":100,"review":87,"gatesPassed":true,"final":96.1,"improved":true,"previousBest":0,"base":"a9a0f233","note":"self-review: reuses existing maxFiles plumbing; validation via errorCliResult (text+json); truncation reporting left to #3587; test + README row","at":"2026-11-15T06:13:30.122Z"}
+{"feature":"max-files","auto":100,"review":85,"gatesPassed":true,"final":95.5,"improved":false,"previousBest":96.1,"base":"58095d65","note":"independent Sonnet review","at":"2026-11-15T07:41:11.941Z"}
+{"feature":"max-files-v2","auto":100,"review":90,"gatesPassed":true,"final":97,"improved":true,"previousBest":0,"base":"4404162f","note":"round-2 independent review","at":"2026-11-15T12:07:44.793Z"}

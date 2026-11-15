@@ -433,7 +433,7 @@ describe('runAnalyzeCli', () => {
       const raised = await runAnalyzeCli([testDir, '--json', '--max-files=3'], { maxFiles: 1 });
       assert.equal((JSON.parse(raised.output) as AnalyzeJsonOutput).totalFindings, 3);
 
-      for (const value of ['0', '-1', '1.5', 'abc']) {
+      for (const value of ['0', '-1', '1.5', 'abc', '1e3', '0x10']) {
         const res = await runAnalyzeCli([testDir, '--json', `--max-files=${value}`]);
         assert.equal(res.exitCode, 1);
         assert.match((JSON.parse(res.output) as AnalyzeJsonOutput).error ?? '', /--max-files must be a positive integer/);
