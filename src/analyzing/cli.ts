@@ -336,14 +336,11 @@ export async function runAnalyzeCli(
   const guideFilter = typeof parsed.values.guide === 'string' ? parsed.values.guide : undefined;
   const includeDocsAndTests = Boolean(parsed.values['include-docs-and-tests']);
   const targetDir = parsed.positionals[0] || '.';
-  const maxFilesArg = parsed.values['max-files'];
-  let maxFiles = options?.maxFiles;
-  if (typeof maxFilesArg === 'string') {
-    maxFiles = /^\d+$/.test(maxFilesArg) ? Number(maxFilesArg) : 0;
-    if (maxFiles < 1) {
-      return errorCliResult(`--max-files must be a positive integer, got: ${maxFilesArg}`, isJson, targetDir);
-    }
+  const maxFilesArg = typeof parsed.values['max-files'] === 'string' ? parsed.values['max-files'] : undefined;
+  if (maxFilesArg !== undefined && !/^0*[1-9]\d*$/.test(maxFilesArg)) {
+    return errorCliResult(`--max-files must be a positive integer, got: ${maxFilesArg}`, isJson, targetDir);
   }
+  const maxFiles = maxFilesArg !== undefined ? Number(maxFilesArg) : options?.maxFiles;
   const baseCwd = options?.cwd ?? process.cwd();
   const resolvedDir = resolve(baseCwd, targetDir);
 
