@@ -1,1 +1,3 @@
 {"feature":"sri-scheme","auto":100,"review":84,"gatesPassed":true,"final":95.2,"improved":true,"previousBest":0,"base":"666a60cd","note":"self-review: scheme-optional host regex + scheme-less fast tokens; integrity branch covers //; rubric mentions // and http; test added","at":"2026-11-15T06:13:30.451Z"}
+{"feature":"sri-scheme","auto":100,"review":88,"gatesPassed":true,"final":96.4,"improved":true,"previousBest":95.2,"base":"dca6496c","note":"independent Sonnet review","at":"2026-11-15T07:31:08.114Z"}
+{"feature":"sri-scheme-v2","auto":100,"review":90,"gatesPassed":true,"final":97,"improved":true,"previousBest":0,"base":"a3f513fb","note":"round-2 independent review","at":"2026-11-15T12:04:36.773Z"}
